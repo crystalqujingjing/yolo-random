@@ -42,7 +42,7 @@ class smp_ep_eth:
 
     #use pcapy to capture packets- no bind, listen stuff- use threads to serve multiple connections
 host = socket.gethostbyname(socket.gethostname())
-tab = {(('ca','44','33','b4','ad'),0):(ETH_MY_MAC,1000,3600),(('ca','44','33','b4','ad'),2):(ETH_MY_MAC,1001,3600)}
+tab = {('ca4433b4ad',0):(ETH_MY_MAC,1000,3600),('ca4433b4ad',2):(ETH_MY_MAC,1001,3600)}
 def directory_smp(ep):  #The specification tells me to return 0 on success, the message flow diagram tells me to return the ETH Addr, port
     if tab.has_key((ep.serviceID,ep.r)):
         return (tab[(ep.serviceID,ep.r)])
@@ -52,7 +52,7 @@ def directory_smp(ep):  #The specification tells me to return 0 on success, the 
 def main():
     p = open_live("eth0",34, False, 100)
     p.setfilter("ether dst 10:10:10:10:10:10 ")
-    p.loop(1, EthDecoder1)
+    p.loop(50, EthDecoder1) #50- denotes number of connections that can be serviced
 def EthDecoder1(hdr,data):
     eth = EthDecoder().decode(data)
     sdsReq = eth.child()
@@ -65,17 +65,18 @@ def EthDecoder1(hdr,data):
     rlen = str1[10:14]
     tid1 = (str1[15:17], str1[17:19], str1[20:22], str1[22:24])
     tid = tuple(int('0x'+i, 16) for i in tid1)
-    sid1 = (str1[25:27], str1[27:29], str1[30:32], str1[32:34], str1[35:37], str1[37:39], str1[40:42], str1[42:44], str1[65:67], str1[67:69])
-    sid = tuple(int('0x'+i, 16) for i in sid1)
-    sid2 = tuple(chr(int('0x'+i, 16)) for i in sid1)
-    sid3 = ''.join(sid2)
-    sid4 = tuple(re.findall('..', sid3))
-    print ver, typ, rlen, tid, sid1, sid2, sid4
+    sid1 = str1[25:29]+str1[30:34]+str1[35:39]+ str1[40:44]+str1[65:69] #sid in hex
+    sid4 = tuple(re.findall('..', sid1))
+    sid2 = tuple(chr(int('0x'+i, 16)) for i in sid4) #hex->char
+    sid3 = ''.join(sid2) #stringified
+    
+    sid = tuple(int('0x'+i, 16) for i in sid4) #hex->dec
+    print ver, typ, rlen, tid, sid1, sid4, sid
     role = int(str1[70:74],16)
     print eth.get_ether_shost()
 
     ep = smp_ep()
-    ep.serviceID = sid4
+    ep.serviceID = sid3
     ep.r = role
     res = directory_smp(ep)
     print res
