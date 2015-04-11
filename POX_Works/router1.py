@@ -47,7 +47,7 @@ class Tutorial (object):
     # which switch port (keys are MACs, values are ports).
     self.mac_to_port = {}
     self.ip_to_port = {"10.0.1.1":1,"10.0.2.1":2,"10.0.3.1":3}
-    self.routing_table = {'10.0.1.0/24': ['10.0.1.100', 's1-eth1', '10.0.1.1', 1], '10.0.2.0/24': ['10.0.2.100', 's1-eth2', '10.0.2.1', 2], '10.0.3.0/24': ['10.0.3.100', 's1-eth3', '10.0.3.1', 3]}
+    self.routing_table = {'10.0.1.0/24': ['10.0.1.100', 's1-eth1', '10.0.1.1', 1, '00:00:00:00:00:01'], '10.0.2.0/24': ['10.0.2.100', 's1-eth2', '10.0.2.1', 2, '00:00:00:00:00:02'], '10.0.3.0/24': ['10.0.3.100', 's1-eth3', '10.0.3.1', 3, '00:00:00:00:00:03']}
   
   def act_like_router (self, packet, packet_in):
     #handle arp
@@ -77,8 +77,9 @@ class Tutorial (object):
 	    # Send message to switch
     	    self.connection.send(msg)
 	    log.debug("ARP REPLY Sent")
-	elif packet.payload.opcode == arp.REPLY:
+	elif packet.payload.opcode == pkt.arp.REPLY:
 	    log.debug ("It's a repLy!" )
+	    self.mac_to_port[packet.src] = packet_in.in_port
 	else:
 	    log.debug( "Some other ARP opcode" )
 
@@ -159,7 +160,30 @@ class Tutorial (object):
 	    	    #msg.in_port = event.port
 
     	    	    # Send message to switch
-	    	    self.connection.send(msg)		
+	    	    self.connection.send(msg)
+	else:
+	    src_ip = ip_packet.srcip
+	    dst_ip = ip_packet.dstip
+	
+	    k = 0
+	    for key in self.routing_table.keys():
+		if dst_ip.inNetwork(key):
+		    k = key
+		    break
+	    if k != 0:
+		port1 = self.routing_table[k][3]
+		dsteth = adr.EthAddr(self.routing_table[k][4])
+
+		msg = of.ofp_packet_out()
+
+		action = of.ofp_action_output(port = port1)
+
+		packet.src = packet.dst
+		packet.dst = dsteth
+		msg.data = packet.pack()
+		msg.actions.append(action)
+		self.connection.send(msg)
+				
 
 
   def _handle_PacketIn (self, event):
